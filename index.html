@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>55th CBCS/860th Votes & Donations</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #8B0000, #006400);
+      color: #fff;
+      font-family: 'Mountains of Christmas', 'Comic Sans MS', cursive;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Falling snow */
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: transparent;
+      pointer-events: none;
+      background-image: 
+        radial-gradient(circle, #fff 1px, transparent 1px),
+        radial-gradient(circle, #fff 1.5px, transparent 1.5px);
+      background-size: 60px 60px, 80px 80px;
+      animation: snow 12s linear infinite;
+      opacity: 0.7;
+      z-index: 0;
+    }
+    @keyframes snow {
+      0% { background-position: 0 0, 0 0; }
+      100% { background-position: 0 1000px, 0 1200px; }
+    }
+
+    h1 {
+      font-size: 4.5rem;
+      text-align: center;
+      color: #FFD700;
+      text-shadow: 0 0 20px #FF0000, 0 0 40px #00FF00;
+      margin: 40px 0;
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes glow { from { text-shadow: 0 0 20px #FF0000; } to { text-shadow: 0 0 40px #00FF00; } }
+
+    .card {
+      background: linear-gradient(145deg, #006400, #8B0000);
+      border: 6px solid #FFD700;
+      border-radius: 20px;
+      box-shadow: 0 0 30px rgba(255,215,0,0.8);
+    }
+
+    .big-number {
+      font-size: 6rem;
+      color: #fff;
+      text-shadow: 0 0 15px #FF0000;
+    }
+
+    .big-money {
+      font-size: 6rem;
+      color: #FFD700;
+      text-shadow: 0 0 20px #006400;
+    }
+
+    canvas {
+      background: rgba(255,255,255,0.95) !important;
+      border: 8px solid #FFD700;
+      border-radius: 20px;
+      box-shadow: 0 0 30px #FF0000;
+    }
+
+    table {
+      background: #8B0000;
+      border: 8px solid #FFD700;
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    th {
+      background: #006400;
+      color: #FFD700;
+      font-size: 1.6rem;
+      text-transform: uppercase;
+    }
+
+    .winner-row {
+      background: linear-gradient(90deg, #FFD700, #FFA500) !important;
+      color: #8B0000 !important;
+      font-weight: bold;
+      font-size: 1.7rem !important;
+    }
+
+    #last-update {
+      font-size: 1.5rem;
+      color: #FFD700;
+      text-shadow: 0 0 10px #000;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="container py-5 position-relative" style="z-index:2;">
+  <h1>MERRY CHRISTMAS<br>VOTES & DONATIONS</h1>
+
+  <div class="row mb-5 g-5 text-center">
+    <div class="col-md-6">
+      <div class="card p-5">
+        <h2 style="color:#fff;">TOTAL VOTES</h2>
+        <div class="big-number" id="totalVotes">0</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card p-5">
+        <h2 style="color:#fff;">TOTAL RAISED</h2>
+        <div class="big-money" id="totalDonations">$0.00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-6 mb-5">
+      <h3 class="text-center mb-4" style="color:#FFD700; font-size:2.5rem;">TOP 10 VOTES</h3>
+      <canvas id="votesChart"></canvas>
+    </div>
+    <div class="col-lg-6 mb-5">
+      <h3 class="text-center mb-4" style="color:#FFD700; font-size:2.5rem;">TOP 10 DONATIONS</h3>
+      <canvas id="donationsChart"></canvas>
+    </div>
+  </div>
+
+  <h3 class="text-center mb-5" style="color:#FFD700; font-size:3.5rem;">NICE LIST LEADERBOARD</h3>
+  <div class="table-responsive">
+    <table class="table table-hover" id="leaderboard">
+      <thead>
+        <tr>
+          <th>RANK</th>
+          <th>NAME</th>
+          <th>VOTES</th>
+          <th>DONATED</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="text-center mt-5" id="last-update">LIVE • HO HO HO</div>
+</div>
+
+<script>
+  const CSV_URL = "https://api.allorigins.win/raw?url=https://docs.google.com/spreadsheets/d/e/2PACX-1vQb3awKxMFjcPNpKnAFAkbaZ75moxIEycfamZ4WNHb61gOC5n6ygLS52Bj2mpEwHpe9GYIspyp2J9xP/pub?output=csv";
+
+  let votesChart, donationsChart;
+
+  function updateDashboard() {
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        const rows = results.data;
+        const map = {};
+
+        rows.forEach(row => {
+          const candidate = (row['Who are you applying your money too?'] || '').trim();
+          const amountStr = (row['How much are you donating?'] || '0').replace(/[^0-9.-]/g, '');
+          const amount = parseFloat(amountStr) || 0;
+
+          if (candidate) {
+            if (!map[candidate]) map[candidate] = { votes: 0, donations: 0 };
+            map[candidate].votes += 1;
+            map[candidate].donations += amount;
+          }
+        });
+
+        let data = Object.keys(map).map(name => ({
+          name,
+          votes: map[name].votes,
+          donations: map[name].donations
+        })).sort((a, b) => b.votes - a.votes);
+
+        const totalVotes = data.reduce((s, r) => s + r.votes, 0);
+        const totalDonations = data.reduce((s, r) => s + r.donations, 0);
+
+        document.getElementById('totalVotes').textContent = totalVotes.toLocaleString();
+        document.getElementById('totalDonations').textContent = '$' + totalDonations.toLocaleString(undefined, {minimumFractionDigits: 2});
+
+        const top10 = data.slice(0, 10);
+        const labels = top10.map(r => r.name.length > 18 ? r.name.substring(0,15)+'...' : r.name);
+
+        if (votesChart) votesChart.destroy();
+        if (donationsChart) donationsChart.destroy();
+
+        votesChart = new Chart(document.getElementById('votesChart'), {
+          type: 'bar',
+          data: { labels, datasets: [{ data: top10.map(r => r.votes), backgroundColor: '#006400', borderColor: '#FFD700', borderWidth: 4 }] },
+          options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+        });
+
+        donationsChart = new Chart(document.getElementById('donationsChart'), {
+          type: 'bar',
+          data: { labels, datasets: [{ data: top10.map(r => r.donations), backgroundColor: '#8B0000', borderColor: '#FFD700', borderWidth: 4 }] },
+          options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+        });
+
+        const tbody = document.querySelector('#leaderboard tbody');
+        tbody.innerHTML = '';
+        data.forEach((row, i) => {
+          const tr = document.createElement('tr');
+          if (i === 0) tr.classList.add('winner-row');
+          tr.innerHTML = `
+            <td><strong>${i + 1}</strong></td>
+            <td>${row.name}</td>
+            <td>${row.votes.toLocaleString()}</td>
+            <td><strong>$${row.donations.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        document.getElementById('last-update').innerHTML = 'LIVE • ' + new Date().toLocaleString();
+      }
+    });
+  }
+
+  updateDashboard();
+  setInterval(updateDashboard, 20000);
+</script>
+</body>
+</html>
